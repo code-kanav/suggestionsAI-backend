@@ -128,3 +128,16 @@ dist
 .yarn/build-state.yml
 .yarn/install-state.gz
 .pnp.*
+
+# Logs and database files for PM2
+.pm2/logs
+.pm2/pids
+
+# Prisma ORM
+.prisma/
+
+# Temporary directories for watch/build tools
+.tmp
+webpack-cache
+temp
+.vercel

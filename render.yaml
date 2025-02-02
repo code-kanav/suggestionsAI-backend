@@ -1,0 +1,13 @@
+services:
+  - type: web
+    name: suggestionAi-backend
+    env: node
+    plan: free # Use 'starter' or 'standard' for paid plans
+    buildCommand: "npm install"
+    startCommand: "node api/index.js"
+    envVars:
+      - key: API_KEY
+        value: AIzaSyDPsegQ5rz_pUnX_OD9-Jf2Ge6OgbFoJsM
+    autoDeploy: true
+    branch: main # Specify the branch to auto-deploy from
+    healthCheckPath: "/" # Update if your app's health endpoint is different
