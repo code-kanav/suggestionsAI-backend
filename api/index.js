@@ -1,53 +1,77 @@
 import express from 'express';
 import dotenv from 'dotenv';
-import { GoogleGenerativeAI,SchemaType } from '@google/generative-ai';
+import { GoogleGenerativeAI, SchemaType } from '@google/generative-ai';
 import cors from 'cors'; 
+
 
 dotenv.config();
 
 const app = express();
 const port = 3001;
-// Enable CORS for requests from localhost:3001
+const API_KEY = process.env.API_KEY;
+// Enable CORS for requests from any origin
 app.use(cors({
-    origin: '*',  // Allow requests from this origin
-    methods: ['GET', 'POST'],  // Allow specific HTTP methods
-    allowedHeaders: ['Content-Type', 'Authorization'],  // Allow specific headers
-    credentials: true,  // Allow cookies to be sent with the request (if needed)
+    origin: '*',
+    methods: ['GET', 'POST'],
+    allowedHeaders: ['Content-Type', 'Authorization'],
+    credentials: true,
 }));
 
 // Parse JSON bodies
 app.use(express.json());
 
 // Initialize GoogleGenerativeAI
-const genAI = new GoogleGenerativeAI("AIzaSyDPsegQ5rz_pUnX_OD9-Jf2Ge6OgbFoJsM");
+const genAI = new GoogleGenerativeAI("AIzaSyDCBLGlL3N5mZpArEuMdUkbR74m7is_uh8");
 let model;
 
-
 const schema = {
-  description: "Query response containing better versions of the question which was input",
+  description: "Query response containing better versions of the clinical question based on provided notes.",
   type: "object",
   properties: {
-      originalQuery: { type: "string" },
+      originalQuestion: { type: "string" },
+      clinicalNotes: { type: "string" },
+      assessment: {
+        type: "object",
+        properties: {
+          appropriate: { 
+            type: "boolean",
+            description: "Whether the original question is related to medial care if not please return false",
+            nullable: false
+          },
+          reason: {
+            type: "string",
+            description: "Reason why the original question is not appropriate for an eConsult if it's not appropriate",
+            nullable: true
+          },
+          missingKeyInfo: {
+            type: "array",
+            description: "Extract at least 2 relevant clinical details from clinical notes",
+            items: { type: "string" },
+            nullable: true
+          }
+        },
+        required: ["appropriate", "reason", "missingKeyInfo"]
+      },
       suggestions: {
           type: "array",
-          description: "you are an expert e consult physician and specialist. given this PCP query, please suggest atleast 3 alternate better versions of the question that is more well defined, and will lead to a better specialist response.",
+          description: "You are an expert clinical physician who helps primary care physicians formulate effective eConsult questions. When a PCP provides both their initial question and clinical notes, you'll analyze them together to suggest improved, focused questions that specialists can efficiently answer. Suggest at least 3 improved versions of the question",
           items: { type: "string" },
           nullable: false
       },
   },
-  required: ["originalQuery", "suggestions"]
+  required: ["originalQuestion", "clinicalNotes", "assessment", "suggestions"]
 };
 
 // Function to initialize the model
 async function initializeModel() {
     try {
         model = genAI.getGenerativeModel({ 
-            model: "gemini-1.5-flash",
+            model: "gemini-2.0-flash",
             generationConfig: {
                 responseMimeType: "application/json",
                 responseSchema: schema,
-              },
-         });
+            },
+        });
         console.log("Model initialized successfully.");
     } catch (error) {
         console.error("Error initializing model:", error);
@@ -56,39 +80,33 @@ async function initializeModel() {
 
 initializeModel();
 
-
-
-
 app.get('/', (req, res) => {
-  res.send('Welcome to the API!');
+    res.send('Welcome to the API!');
 });
-
 
 app.post('/suggestions', async (req, res) => {
-  const { input } = req.body;
-  if (!input) {
-      return res.status(400).send({ error: 'input is required.' });
-  }
-  if (!model) {
-      return res.status(500).send({ error: 'Model is not initialized.' });
-  }
+    const { clinicalQuestion, clinicalNotes } = req.body;
+    
+    if (!clinicalQuestion || !clinicalNotes) {
+        return res.status(400).send({ error: 'Both clinicalQuestion and clinicalNotes are required.' });
+    }
+    if (!model) {
+        return res.status(500).send({ error: 'Model is not initialized.' });
+    }
 
-  try {
-      // Generate suggestions using the model
-      const result = await model.generateContent(input);
-      // Parse and format the response
-      const response = await result.response;
-      const text = await response.text();
-      const suggestions = JSON.parse(text);
-      res.send(suggestions);
-  } catch (error) {
-      console.error('Error querying model:', error);
-      res.status(500).send({ error: 'Failed to process the query.' });
-  }
+    try {
+        // Generate suggestions using the model
+        const result = await model.generateContent([`Clinical Question: ${clinicalQuestion}\nClinical Notes: ${clinicalNotes}`]);
+        // Parse and format the response
+        const response = await result.response;
+        const text = await response.text();
+        const suggestions = JSON.parse(text);
+        res.send(suggestions);
+    } catch (error) {
+        console.error('Error querying model:', error);
+        res.status(500).send({ error: 'Failed to process the query.' });
+    }
 });
-
-
-
 
 // Start the server
 app.listen(port, () => {
